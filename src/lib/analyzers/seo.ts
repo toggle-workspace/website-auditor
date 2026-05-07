@@ -1,16 +1,78 @@
-import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { SeoData, SeoCheckItem } from '@/lib/types';
 import { getOrigin } from '@/lib/utils/url';
 
-export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: string; score: number }> {
-  const response = await axios.get(url, {
-    timeout: 15000,
-    headers: { 'User-Agent': 'WebsiteAuditor/1.0 (compatibility check)' },
-    maxRedirects: 5,
-  });
+function parseRobotsTxt(content: string, targetUrl: string): { allowsCrawl: boolean; sitemapUrl: string | null } {
+  const lines = content.split('\n').map(l => l.split('#')[0].trim()).filter(Boolean);
+  let sitemapUrl: string | null = null;
+  const rules: Array<{ agents: string[]; disallow: string[]; allow: string[] }> = [];
+  let currentAgents: string[] = [];
+  let currentDisallow: string[] = [];
+  let currentAllow: string[] = [];
 
-  const html = response.data as string;
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (lower.startsWith('sitemap:')) {
+      sitemapUrl = line.slice(8).trim();
+    } else if (lower.startsWith('user-agent:')) {
+      if (currentAgents.length > 0) {
+        rules.push({ agents: currentAgents, disallow: currentDisallow, allow: currentAllow });
+        currentAgents = [];
+        currentDisallow = [];
+        currentAllow = [];
+      }
+      currentAgents.push(line.slice(11).trim().toLowerCase());
+    } else if (lower.startsWith('disallow:')) {
+      currentDisallow.push(line.slice(9).trim());
+    } else if (lower.startsWith('allow:')) {
+      currentAllow.push(line.slice(6).trim());
+    }
+  }
+  if (currentAgents.length > 0) {
+    rules.push({ agents: currentAgents, disallow: currentDisallow, allow: currentAllow });
+  }
+
+  let path: string;
+  try {
+    path = new URL(targetUrl).pathname;
+  } catch {
+    path = '/';
+  }
+
+  for (const agentName of ['googlebot', '*']) {
+    const rule = rules.find(r => r.agents.includes(agentName));
+    if (!rule) continue;
+    for (const allow of rule.allow) {
+      if (allow && path.startsWith(allow)) return { allowsCrawl: true, sitemapUrl };
+    }
+    for (const disallow of rule.disallow) {
+      if (disallow && path.startsWith(disallow)) return { allowsCrawl: false, sitemapUrl };
+    }
+  }
+  return { allowsCrawl: true, sitemapUrl };
+}
+
+async function fetchSitemapCount(url: string): Promise<number> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return 0;
+    const xml = await res.text();
+    const urlCount = (xml.match(/<url[\s>]/gi) ?? []).length;
+    const sitemapRefCount = (xml.match(/<sitemap[\s>]/gi) ?? []).length;
+    return urlCount || sitemapRefCount;
+  } catch {
+    return 0;
+  }
+}
+
+export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: string; score: number }> {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'WebsiteAuditor/1.0 (compatibility check)' },
+    signal: AbortSignal.timeout(15000),
+    redirect: 'follow',
+  });
+  if (!res.ok) throw new Error(`Failed to fetch URL: ${res.status}`);
+  const html = await res.text();
   const $ = cheerio.load(html);
   const origin = getOrigin(url);
 
@@ -44,14 +106,13 @@ export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: st
   let sitemapUrlFromRobots: string | null = null;
 
   try {
-    const robotsRes = await axios.get(`${origin}/robots.txt`, { timeout: 5000 });
-    if (robotsRes.status === 200) {
+    const robotsRes = await fetch(`${origin}/robots.txt`, { signal: AbortSignal.timeout(5000) });
+    if (robotsRes.ok) {
       hasRobotsTxt = true;
-      const robotsParser = require('robots-parser');
-      const parser = robotsParser(`${origin}/robots.txt`, robotsRes.data);
-      robotsAllowsCrawl = parser.isAllowed(url, 'Googlebot') !== false;
-      const sitemaps = parser.getSitemaps();
-      if (sitemaps.length > 0) sitemapUrlFromRobots = sitemaps[0];
+      const robotsText = await robotsRes.text();
+      const parsed = parseRobotsTxt(robotsText, url);
+      robotsAllowsCrawl = parsed.allowsCrawl;
+      sitemapUrlFromRobots = parsed.sitemapUrl;
     }
   } catch {
     // no robots.txt
@@ -69,20 +130,12 @@ export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: st
   ].filter(Boolean) as string[];
 
   for (const candidate of sitemapCandidates) {
-    try {
-      const SitemapperModule = await import('sitemapper');
-      const SitemapperClass = SitemapperModule.default || SitemapperModule;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mapper = new (SitemapperClass as any)({ url: candidate, timeout: 8000 });
-      const result = await mapper.fetch();
-      if (result.sites.length > 0) {
-        hasSitemap = true;
-        sitemapUrl = candidate;
-        sitemapPageCount = result.sites.length;
-        break;
-      }
-    } catch {
-      // try next
+    const count = await fetchSitemapCount(candidate);
+    if (count > 0) {
+      hasSitemap = true;
+      sitemapUrl = candidate;
+      sitemapPageCount = count;
+      break;
     }
   }
 

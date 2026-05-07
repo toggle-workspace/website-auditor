@@ -1,7 +1,48 @@
 import * as cheerio from 'cheerio';
-import axios from 'axios';
 import { BugData, BrokenLink, MissingAltImage } from '@/lib/types';
 import { isSameDomain, getOrigin } from '@/lib/utils/url';
+
+async function checkLinks(html: string, baseUrl: string): Promise<{ brokenLinks: BrokenLink[]; linksChecked: number }> {
+  const $ = cheerio.load(html);
+  const hrefs = $('a[href]')
+    .map((_, el) => $(el).attr('href') ?? '')
+    .get()
+    .filter(href => href && !/^(mailto:|tel:|javascript:|#)/.test(href));
+
+  const resolved = Array.from(new Set(
+    hrefs.map(href => {
+      try { return new URL(href, baseUrl).href; } catch { return null; }
+    }).filter((u): u is string => u !== null && isSameDomain(u, baseUrl))
+  )).slice(0, 50);
+
+  const results = await Promise.allSettled(
+    resolved.map(async (url) => {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        try {
+          const res = await fetch(url, { method: 'HEAD', signal: controller.signal, redirect: 'follow' });
+          return { url, status: res.status, broken: res.status >= 400 };
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch {
+        return { url, status: null as number | null, broken: true };
+      }
+    })
+  );
+
+  const checked = results
+    .map(r => (r.status === 'fulfilled' ? r.value : null))
+    .filter((r): r is { url: string; status: number | null; broken: boolean } => r !== null);
+
+  const brokenLinks: BrokenLink[] = checked
+    .filter(r => r.broken)
+    .slice(0, 20)
+    .map(r => ({ url: r.url, status: r.status, parent: baseUrl }));
+
+  return { brokenLinks, linksChecked: checked.length };
+}
 
 export async function analyzeBugs(url: string, html: string): Promise<{ data: BugData; score: number }> {
   const $ = cheerio.load(html);
@@ -22,7 +63,7 @@ export async function analyzeBugs(url: string, html: string): Promise<{ data: Bu
   let hasFavicon = hasFaviconInHtml;
   if (!hasFavicon) {
     try {
-      const res = await axios.head(`${origin}/favicon.ico`, { timeout: 5000 });
+      const res = await fetch(`${origin}/favicon.ico`, { method: 'HEAD', signal: AbortSignal.timeout(5000) });
       hasFavicon = res.status < 400;
     } catch {
       hasFavicon = false;
@@ -36,46 +77,16 @@ export async function analyzeBugs(url: string, html: string): Promise<{ data: Bu
 
   const missingLangAttribute = !$('html').attr('lang');
 
-  // Broken link check via linkinator
+  // Broken link check
   let brokenLinks: BrokenLink[] = [];
   let linksChecked = 0;
 
   try {
-    const { LinkChecker } = await import('linkinator');
-    const checker = new LinkChecker();
-
-    const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), 20000));
-    const checkPromise = checker.check({
-      path: url,
-      recurse: false,
-      timeout: 5000,
-      linksToSkip: ['^mailto:', '^tel:', '^javascript:', '^#'],
-    });
-
-    const results = await Promise.race([checkPromise, timeoutPromise]);
-
-    if (results) {
-      const sameDomainLinks = results.links.filter(l => {
-        try {
-          return isSameDomain(l.url, url);
-        } catch {
-          return false;
-        }
-      });
-
-      linksChecked = sameDomainLinks.length;
-      brokenLinks = sameDomainLinks
-        .filter(l => l.state === 'BROKEN')
-        .slice(0, 20)
-        .map(l => ({
-          url: l.url,
-          status: l.status ?? null,
-          parent: url,
-          failureReason: l.failureDetails?.[0]?.toString(),
-        }));
-    }
+    const result = await checkLinks(html, url);
+    brokenLinks = result.brokenLinks;
+    linksChecked = result.linksChecked;
   } catch {
-    // linkinator failed gracefully
+    // link check failed gracefully
   }
 
   // Build checks

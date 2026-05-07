@@ -1,0 +1,11 @@
+name = "website-auditor"
+main = ".open-next/worker.js"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+assets = { directory = ".open-next/assets" }
+
+[vars]
+# Set secrets via:
+# npx wrangler secret put PAGESPEED_API_KEY
+# npx wrangler secret put OPEN_PAGERANK_API_KEY
