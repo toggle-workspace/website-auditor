@@ -1,9 +1,8 @@
-import * as cheerio from 'cheerio';
+import type { CheerioAPI } from 'cheerio';
 import { BugData, BrokenLink, MissingAltImage } from '@/lib/types';
 import { isSameDomain, getOrigin } from '@/lib/utils/url';
 
-async function checkLinks(html: string, baseUrl: string): Promise<{ brokenLinks: BrokenLink[]; linksChecked: number }> {
-  const $ = cheerio.load(html);
+async function checkLinks($: CheerioAPI, baseUrl: string): Promise<{ brokenLinks: BrokenLink[]; linksChecked: number }> {
   const hrefs = $('a[href]')
     .map((_, el) => $(el).attr('href') ?? '')
     .get()
@@ -44,8 +43,7 @@ async function checkLinks(html: string, baseUrl: string): Promise<{ brokenLinks:
   return { brokenLinks, linksChecked: checked.length };
 }
 
-export async function analyzeBugs(url: string, html: string): Promise<{ data: BugData; score: number }> {
-  const $ = cheerio.load(html);
+export async function analyzeBugs(url: string, $: CheerioAPI): Promise<{ data: BugData; score: number }> {
   const origin = getOrigin(url);
   const isHttps = url.startsWith('https://');
 
@@ -82,7 +80,7 @@ export async function analyzeBugs(url: string, html: string): Promise<{ data: Bu
   let linksChecked = 0;
 
   try {
-    const result = await checkLinks(html, url);
+    const result = await checkLinks($, url);
     brokenLinks = result.brokenLinks;
     linksChecked = result.linksChecked;
   } catch {

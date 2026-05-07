@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     let perfData;
     let perfScore: number | null = null;
     let perfResult: SectionResult;
-    let seoHtml = '';
+    let seo$: import('cheerio').CheerioAPI | null = null;
     let seoResult: SectionResult;
     let seoScore: number | null = null;
 
@@ -47,8 +47,8 @@ export async function GET(request: Request) {
     }
 
     if (seoSettled.status === 'fulfilled') {
-      const { data, html, score } = seoSettled.value;
-      seoHtml = html;
+      const { data, $, score } = seoSettled.value;
+      seo$ = $;
       seoScore = score;
       seoResult = { score, rating: ratingFromScore(score), data };
     } else {
@@ -66,12 +66,12 @@ export async function GET(request: Request) {
     // Step 3: Run UX, Bugs, Traffic in parallel using shared data
     const [uxSettled, bugsSettled, trafficSettled] = await Promise.allSettled([
       (async () => {
-        if (!seoHtml) throw new Error('Missing HTML for UX analysis');
-        return analyzeUx(seoHtml, emptyPerfData);
+        if (!seo$) throw new Error('Missing HTML for UX analysis');
+        return analyzeUx(seo$, emptyPerfData);
       })(),
       (async () => {
-        if (!seoHtml) throw new Error('Missing HTML for bug analysis');
-        return analyzeBugs(url, seoHtml);
+        if (!seo$) throw new Error('Missing HTML for bug analysis');
+        return analyzeBugs(url, seo$);
       })(),
       (async () => {
         return analyzeTraffic(url, emptyPerfData, seoScore);

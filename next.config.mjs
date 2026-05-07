@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  serverExternalPackages: ['cheerio'],
-};
+const nextConfig = {};
 
 export default nextConfig;
