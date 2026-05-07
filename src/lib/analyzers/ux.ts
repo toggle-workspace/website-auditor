@@ -1,8 +1,7 @@
-import * as cheerio from 'cheerio';
+import type { CheerioAPI } from 'cheerio';
 import { UxData, UxCheckItem, PerformanceData } from '@/lib/types';
 
-export function analyzeUx(html: string, perfData: PerformanceData): { data: UxData; score: number } {
-  const $ = cheerio.load(html);
+export function analyzeUx($: CheerioAPI, perfData: PerformanceData): { data: UxData; score: number } {
 
   const mobileScore = perfData.mobile.performanceScore;
   const accessibilityScore = perfData.mobile.accessibilityScore;

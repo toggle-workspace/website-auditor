@@ -65,7 +65,7 @@ async function fetchSitemapCount(url: string): Promise<number> {
   }
 }
 
-export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: string; score: number }> {
+export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: string; $: cheerio.CheerioAPI; score: number }> {
   const res = await fetch(url, {
     headers: { 'User-Agent': 'WebsiteAuditor/1.0 (compatibility check)' },
     signal: AbortSignal.timeout(8000),
@@ -129,12 +129,14 @@ export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: st
     `${origin}/sitemap_index.xml`,
   ].filter(Boolean) as string[];
 
-  for (const candidate of sitemapCandidates) {
-    const count = await fetchSitemapCount(candidate);
-    if (count > 0) {
+  const sitemapResults = await Promise.allSettled(
+    sitemapCandidates.map(c => fetchSitemapCount(c).then(n => ({ url: c, count: n })))
+  );
+  for (const r of sitemapResults) {
+    if (r.status === 'fulfilled' && r.value.count > 0) {
       hasSitemap = true;
-      sitemapUrl = candidate;
-      sitemapPageCount = count;
+      sitemapUrl = r.value.url;
+      sitemapPageCount = r.value.count;
       break;
     }
   }
@@ -209,6 +211,7 @@ export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: st
 
   return {
     html,
+    $,
     score,
     data: {
       url,
