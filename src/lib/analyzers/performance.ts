@@ -59,7 +59,7 @@ async function fetchPageSpeed(url: string, strategy: 'mobile' | 'desktop') {
   if (apiKey) params.set('key', apiKey);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), 20000);
 
   try {
     const res = await fetch(`${PAGESPEED_BASE}?${params.toString()}`, {

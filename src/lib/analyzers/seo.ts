@@ -54,7 +54,7 @@ function parseRobotsTxt(content: string, targetUrl: string): { allowsCrawl: bool
 
 async function fetchSitemapCount(url: string): Promise<number> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) return 0;
     const xml = await res.text();
     const urlCount = (xml.match(/<url[\s>]/gi) ?? []).length;
@@ -68,7 +68,7 @@ async function fetchSitemapCount(url: string): Promise<number> {
 export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: string; score: number }> {
   const res = await fetch(url, {
     headers: { 'User-Agent': 'WebsiteAuditor/1.0 (compatibility check)' },
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(8000),
     redirect: 'follow',
   });
   if (!res.ok) throw new Error(`Failed to fetch URL: ${res.status}`);
@@ -106,7 +106,7 @@ export async function analyzeSeo(url: string): Promise<{ data: SeoData; html: st
   let sitemapUrlFromRobots: string | null = null;
 
   try {
-    const robotsRes = await fetch(`${origin}/robots.txt`, { signal: AbortSignal.timeout(5000) });
+    const robotsRes = await fetch(`${origin}/robots.txt`, { signal: AbortSignal.timeout(3000) });
     if (robotsRes.ok) {
       hasRobotsTxt = true;
       const robotsText = await robotsRes.text();

@@ -13,13 +13,13 @@ async function checkLinks(html: string, baseUrl: string): Promise<{ brokenLinks:
     hrefs.map(href => {
       try { return new URL(href, baseUrl).href; } catch { return null; }
     }).filter((u): u is string => u !== null && isSameDomain(u, baseUrl))
-  )).slice(0, 50);
+  )).slice(0, 20);
 
   const results = await Promise.allSettled(
     resolved.map(async (url) => {
       try {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 5000);
+        const timer = setTimeout(() => controller.abort(), 3000);
         try {
           const res = await fetch(url, { method: 'HEAD', signal: controller.signal, redirect: 'follow' });
           return { url, status: res.status, broken: res.status >= 400 };

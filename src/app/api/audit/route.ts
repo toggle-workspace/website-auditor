@@ -24,36 +24,35 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Step 1: Run performance first (shared data needed for UX & Traffic)
+    // Step 1: Run performance and SEO in parallel (independent — neither needs the other's output)
     let perfData;
     let perfScore: number | null = null;
     let perfResult: SectionResult;
-
-    try {
-      perfData = await analyzePerformance(url);
-      perfScore = scoreFromPerformance(perfData);
-      perfResult = {
-        score: perfScore,
-        rating: ratingFromScore(perfScore),
-        data: perfData,
-      };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Performance analysis failed';
-      perfResult = errResult(msg);
-    }
-
-    // Step 2: Run SEO to get HTML (shared with UX and bugs)
     let seoHtml = '';
     let seoResult: SectionResult;
     let seoScore: number | null = null;
 
-    try {
-      const { data, html, score } = await analyzeSeo(url);
+    const [perfSettled, seoSettled] = await Promise.allSettled([
+      analyzePerformance(url),
+      analyzeSeo(url),
+    ]);
+
+    if (perfSettled.status === 'fulfilled') {
+      perfData = perfSettled.value;
+      perfScore = scoreFromPerformance(perfData);
+      perfResult = { score: perfScore, rating: ratingFromScore(perfScore), data: perfData };
+    } else {
+      const msg = perfSettled.reason instanceof Error ? perfSettled.reason.message : 'Performance analysis failed';
+      perfResult = errResult(msg);
+    }
+
+    if (seoSettled.status === 'fulfilled') {
+      const { data, html, score } = seoSettled.value;
       seoHtml = html;
       seoScore = score;
       seoResult = { score, rating: ratingFromScore(score), data };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'SEO analysis failed';
+    } else {
+      const msg = seoSettled.reason instanceof Error ? seoSettled.reason.message : 'SEO analysis failed';
       seoResult = errResult(msg);
     }
 
