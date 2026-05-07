@@ -9,8 +9,10 @@ import PerformanceSection from './sections/PerformanceSection';
 import SeoSection from './sections/SeoSection';
 import UxSection from './sections/UxSection';
 import BugSection from './sections/BugSection';
+import BrowserSection from './sections/BrowserSection';
 import TrafficSection from './sections/TrafficSection';
 import PdfExportButton from '../pdf/PdfExportButton';
+import CopyForAiButton from './CopyForAiButton';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -80,7 +82,8 @@ export default function ReportClient({ rawUrl }: Props) {
           <ScoreGaugeGrid report={report} />
         </div>
 
-        <div className="flex justify-end mb-6">
+        <div className="flex items-center justify-end gap-3 mb-6">
+          <CopyForAiButton report={report} />
           <PdfExportButton report={report} />
         </div>
 
@@ -89,6 +92,7 @@ export default function ReportClient({ rawUrl }: Props) {
           <SeoSection data={report.seo} />
           <UxSection data={report.ux} />
           <BugSection data={report.bugs} />
+          <BrowserSection data={report.browser} />
           <TrafficSection data={report.traffic} />
         </div>
 

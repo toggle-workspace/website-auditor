@@ -136,6 +136,44 @@ export interface BugData {
   }>;
 }
 
+// ─── Browser ──────────────────────────────────────────────────────────────────
+
+export interface ConsoleMessage {
+  type: 'error' | 'warning';
+  text: string;
+  url?: string;
+  line?: number;
+  column?: number;
+}
+
+export interface NetworkError {
+  url: string;
+  resourceType: string;
+  errorText: string;
+}
+
+export interface JsError {
+  message: string;
+  stack?: string;
+}
+
+export interface BrowserData {
+  consoleMessages: ConsoleMessage[];
+  networkErrors: NetworkError[];
+  jsErrors: JsError[];
+  consoleErrorCount: number;
+  consoleWarningCount: number;
+  networkErrorCount: number;
+  jsErrorCount: number;
+  hasHorizontalScroll: boolean;
+  checks: Array<{
+    id: string;
+    label: string;
+    status: 'pass' | 'fail' | 'warning';
+    detail?: string;
+  }>;
+}
+
 // ─── Traffic ──────────────────────────────────────────────────────────────────
 
 export interface TrafficData {
@@ -160,6 +198,7 @@ export interface AuditReport {
   seo: SectionResult<SeoData>;
   ux: SectionResult<UxData>;
   bugs: SectionResult<BugData>;
+  browser: SectionResult<BrowserData>;
   traffic: SectionResult<TrafficData>;
 }
 

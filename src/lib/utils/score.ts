@@ -36,10 +36,11 @@ export function ratingLabel(rating: ScoreRating): string {
 
 export function calculateOverallScore(report: Partial<AuditReport>): number | null {
   const weights: [number | null | undefined, number][] = [
-    [report.performance?.score, 0.30],
-    [report.seo?.score, 0.25],
+    [report.performance?.score, 0.25],
+    [report.seo?.score, 0.20],
     [report.ux?.score, 0.20],
     [report.bugs?.score, 0.15],
+    [report.browser?.score, 0.10],
     [report.traffic?.score, 0.10],
   ];
 
