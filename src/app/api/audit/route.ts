@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+
+export const maxDuration = 90;
 import { normalizeUrl, extractDomain } from '@/lib/utils/url';
 import { ratingFromScore, calculateOverallScore } from '@/lib/utils/score';
 import { analyzePerformance, scoreFromPerformance } from '@/lib/analyzers/performance';
@@ -6,6 +8,7 @@ import { analyzeSeo } from '@/lib/analyzers/seo';
 import { analyzeUx } from '@/lib/analyzers/ux';
 import { analyzeBugs } from '@/lib/analyzers/bugs';
 import { analyzeTraffic } from '@/lib/analyzers/traffic';
+import { analyzeBrowser } from '@/lib/analyzers/browser';
 import { AuditReport, SectionResult } from '@/lib/types';
 
 function errResult(error: string): SectionResult {
@@ -63,8 +66,8 @@ export async function GET(request: Request) {
       fetchedAt: new Date().toISOString(),
     };
 
-    // Step 3: Run UX, Bugs, Traffic in parallel using shared data
-    const [uxSettled, bugsSettled, trafficSettled] = await Promise.allSettled([
+    // Step 3: Run UX, Bugs, Traffic, and Browser in parallel using shared data
+    const [uxSettled, bugsSettled, trafficSettled, browserSettled] = await Promise.allSettled([
       (async () => {
         if (!seo$) throw new Error('Missing HTML for UX analysis');
         return analyzeUx(seo$, emptyPerfData);
@@ -75,6 +78,9 @@ export async function GET(request: Request) {
       })(),
       (async () => {
         return analyzeTraffic(url, emptyPerfData, seoScore);
+      })(),
+      (async () => {
+        return analyzeBrowser(url);
       })(),
     ]);
 
@@ -93,6 +99,11 @@ export async function GET(request: Request) {
         ? { score: trafficSettled.value.score, rating: ratingFromScore(trafficSettled.value.score), data: trafficSettled.value.data }
         : errResult(trafficSettled.reason?.message ?? 'Traffic analysis failed');
 
+    const browserResult: SectionResult =
+      browserSettled.status === 'fulfilled'
+        ? { score: browserSettled.value.score, rating: ratingFromScore(browserSettled.value.score), data: browserSettled.value.data }
+        : errResult(browserSettled.reason?.message ?? 'Browser analysis failed');
+
     const report: AuditReport = {
       url,
       domain: extractDomain(url),
@@ -106,6 +117,8 @@ export async function GET(request: Request) {
       ux: uxResult as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       bugs: bugsResult as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      browser: browserResult as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       traffic: trafficResult as any,
     };
